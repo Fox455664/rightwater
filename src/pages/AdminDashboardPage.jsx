@@ -38,22 +38,32 @@ const AdminDashboardPage = () => {
 
   const loadDashboardData = async () => {
     try {
-      console.log('جلب الطلبات...');
+      // جلب الطلبات من Firestore
       const ordersSnapshot = await getDocs(collection(db, 'orders'));
       const orders = ordersSnapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
           ...data,
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(0) // fallback لتاريخ افتراضي
+          // تحويل createdAt إلى تاريخ JS لو كان Timestamp من Firestore
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+          total: typeof data.total === 'number' ? data.total : 0, // حماية total
+          customerEmail: data.customerEmail || '',
+          customerName: data.customerName || '',
         };
       });
-      console.log('تم جلب الطلبات:', orders.length);
 
-      console.log('جلب المنتجات...');
+      // جلب المنتجات من Firestore
       const productsSnapshot = await getDocs(collection(db, 'products'));
-      const products = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      console.log('تم جلب المنتجات:', products.length);
+      const products = productsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          sales: typeof data.sales === 'number' ? data.sales : 0, // حماية sales
+          name: data.name || '',
+        };
+      });
 
       // حساب الإحصائيات
       const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
@@ -66,7 +76,7 @@ const AdminDashboardPage = () => {
         .slice(0, 5);
 
       const topProducts = products
-        .sort((a, b) => (b.sales || 0) - (a.sales || 0))
+        .sort((a, b) => b.sales - a.sales)
         .slice(0, 5);
 
       setDashboardStats({
@@ -164,7 +174,7 @@ const AdminDashboardPage = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
                   title="إجمالي الإيرادات"
-                  value={`$${dashboardStats.totalRevenue.toFixed(2)}`}
+                  value={`$${(dashboardStats.totalRevenue ?? 0).toFixed(2)}`}
                   icon={DollarSign}
                   color="text-green-400"
                   delay={0.1}
@@ -224,14 +234,16 @@ const AdminDashboardPage = () => {
                                   <p className="text-sm text-gray-300">{order.customerName}</p>
                                 </div>
                                 <div className="text-right">
-                                  <p className="font-bold text-green-400">${order.total.toFixed(2)}</p>
+                                  <p className="font-bold text-green-400">
+                                    ${order.total !== undefined ? order.total.toFixed(2) : '0.00'}
+                                  </p>
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleViewOrder(order)}
-                                    className="flex items-center space-x-1 space-x-reverse text-blue-400 hover:text-blue-600"
+                                    className="mt-1"
                                   >
-                                    <Eye className="w-4 h-4" />
+                                    <Eye className="w-3 h-3 mr-1" />
                                     عرض
                                   </Button>
                                 </div>
@@ -240,7 +252,7 @@ const AdminDashboardPage = () => {
                           </motion.div>
                         ))}
                         {dashboardStats.recentOrders.length === 0 && (
-                          <p className="text-gray-400 text-center py-4">لا توجد طلبات حديثة</p>
+                          <p className="text-center text-gray-400 py-8">لا توجد طلبات حديثة</p>
                         )}
                       </div>
                     </CardContent>
@@ -250,14 +262,14 @@ const AdminDashboardPage = () => {
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.7 }}
+                  transition={{ delay: 0.6 }}
                 >
                   <Card className="glass-effect neon-glow">
                     <CardHeader>
                       <CardTitle className="flex items-center space-x-2 space-x-reverse">
                         <Star className="w-5 h-5 text-yellow-400" />
                         <span className="bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
-                          أكثر المنتجات مبيعًا
+                          أفضل المنتجات
                         </span>
                       </CardTitle>
                     </CardHeader>
@@ -268,20 +280,26 @@ const AdminDashboardPage = () => {
                             key={product.id}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.8 + index * 0.1 }}
+                            transition={{ delay: 0.7 + index * 0.1 }}
                             className="gradient-border"
                           >
-                            <div className="gradient-border-content p-3 flex items-center justify-between">
-                              <div>
-                                <p className="font-semibold text-white">{product.name}</p>
-                                <p className="text-sm text-gray-300">{product.category}</p>
+                            <div className="gradient-border-content">
+                              <div className="flex items-center justify-between p-3">
+                                <div className="flex items-center space-x-3 space-x-reverse">
+                                  <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
+                                    <span className="text-white font-bold">#{index + 1}</span>
+                                  </div>
+                                  <span className="font-semibold text-white">{product.name}</span>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-bold text-yellow-400">{product.sales || 0} مبيعات</p>
+                                </div>
                               </div>
-                              <p className="font-bold text-yellow-400">{product.sales || 0} مبيعات</p>
                             </div>
                           </motion.div>
                         ))}
                         {dashboardStats.topProducts.length === 0 && (
-                          <p className="text-gray-400 text-center py-4">لا توجد بيانات لعرضها</p>
+                          <p className="text-center text-gray-400 py-8">لا توجد منتجات مباعة</p>
                         )}
                       </div>
                     </CardContent>
@@ -290,15 +308,18 @@ const AdminDashboardPage = () => {
               </div>
             </TabsContent>
 
-            <TabsContent value="orders" className="space-y-6">
-              <OrderManagement onViewOrder={handleViewOrder} />
+            <TabsContent value="orders">
+              <OrderManagement
+                onViewOrder={handleViewOrder}
+                onRefresh={loadDashboardData}
+              />
             </TabsContent>
 
-            <TabsContent value="order-details" className="space-y-6">
+            <TabsContent value="order-details">
               {selectedOrder ? (
                 <>
-                  <Button variant="ghost" onClick={handleBackToOrders}>
-                    ← رجوع للطلبات
+                  <Button variant="outline" onClick={handleBackToOrders} className="mb-4">
+                    العودة إلى الطلبات
                   </Button>
                   <OrderDetailsView order={selectedOrder} />
                 </>
@@ -307,8 +328,8 @@ const AdminDashboardPage = () => {
               )}
             </TabsContent>
 
-            <TabsContent value="products" className="space-y-6">
-              <ProductManagement />
+            <TabsContent value="products">
+              <ProductManagement onRefresh={loadDashboardData} />
             </TabsContent>
           </AnimatePresence>
         </Tabs>
