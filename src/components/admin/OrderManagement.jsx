@@ -83,9 +83,11 @@ const OrderManagement = () => {
         )
       );
       toast({
-        title: "✅ تم تحديث حالة الطلب",
-        description: `تم تغيير حالة الطلب إلى ${statusOptions.find(s => s.value === newStatus)?.label || newStatus}.`,
-        className: "bg-green-500 text-white"
+        toast({
+  title: "✅ تم تحديث حالة الطلب",
+  description: `تم تغيير حالة الطلب إلى ${statusOptions.find(s => s.value === newStatus)?.label || newStatus}.`,
+  className: "bg-green-500 text-white"
+});
       });
     } catch (error) {
       toast({
