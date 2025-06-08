@@ -71,7 +71,6 @@ const OrderDetailsView = () => {
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     const ordersQuery = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
@@ -137,21 +136,18 @@ const OrderDetailsView = () => {
     }
   };
 
+  // تصفية الطلبات حسب البحث (رقم الطلب أو اسم العميل)
   const filteredOrders = useMemo(() => {
-    let filtered = orders;
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(order => order.status === statusFilter);
-    }
-    if (searchTerm.trim()) {
-      const lowerSearch = searchTerm.trim().toLowerCase();
-      filtered = filtered.filter(order => {
-        const idMatch = order.id.toLowerCase().includes(lowerSearch);
-        const nameMatch = order.customerInfo?.name?.toLowerCase().includes(lowerSearch);
-        return idMatch || nameMatch;
-      });
-    }
-    return filtered;
-  }, [searchTerm, orders, statusFilter]);
+    if (!searchTerm.trim()) return orders;
+
+    const lowerSearch = searchTerm.trim().toLowerCase();
+    return orders.filter(order => {
+      const idMatch = order.id.toLowerCase().includes(lowerSearch);
+      const nameMatch = order.customerInfo?.name?.toLowerCase().includes(lowerSearch);
+      return idMatch || nameMatch;
+    });
+
+  }, [searchTerm, orders]);
 
   if (loading) {
     return (
@@ -178,7 +174,8 @@ const OrderDetailsView = () => {
         عرض وإدارة الطلبات
       </h2>
 
-      <div className="flex flex-col md:flex-row gap-4 mb-4 items-start md:items-center justify-between">
+      {/* حقل البحث */}
+      <div className="mb-4">
         <input
           type="text"
           placeholder="ابحث برقم الطلب أو اسم العميل..."
@@ -186,21 +183,135 @@ const OrderDetailsView = () => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           dir="rtl"
+          aria-label="بحث عن الطلبات"
         />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="تصفية حسب الحالة" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">كل الطلبات</SelectItem>
-            {statusOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
-      {/* يمكنك هنا إدراج جدول الطلبات باستخدام filteredOrders كما في الكود السابق */}
+      {filteredOrders.length === 0 ? (
+        <p className="text-muted-foreground text-center py-8">لا توجد طلبات تطابق البحث.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border shadow-sm bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="text-right">رقم الطلب</TableHead>
+                <TableHead className="text-right">اسم العميل</TableHead>
+                <TableHead className="text-right">التاريخ</TableHead>
+                <TableHead className="text-right">الإجمالي (ج.م)</TableHead>
+                <TableHead className="text-right">الحالة</TableHead>
+                <TableHead className="text-center">الإجراءات</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredOrders.map((order) => (
+                <motion.tr
+                  key={order.id}
+                  layout
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="hover:bg-muted/30 transition-colors"
+                >
+                  <TableCell className="font-medium text-primary truncate max-w-[100px]">{order.id}</TableCell>
+                  <TableCell>{order.customerInfo?.name || 'غير متوفر'}</TableCell>
+                  <TableCell>{order.createdAt ? new Date(order.createdAt).toLocaleDateString('ar-EG') : 'غير متوفر'}</TableCell>
+                  <TableCell>{(order.totalAmount || 0).toLocaleString('ar-EG')}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={order.status}
+                      onValueChange={(newStatus) => handleStatusChange(order.id, newStatus)}
+                    >
+                      <SelectTrigger className={`w-[150px] text-xs h-9 ${getStatusStyles(order.status)}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value} className="flex items-center gap-2">
+                            {option.icon} {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="text-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewOrder(order)}
+                      title="عرض الطلب"
+                      aria-label={`عرض تفاصيل الطلب رقم ${order.id}`}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => confirmDeleteOrder(order)}
+                      title="حذف الطلب"
+                      aria-label={`حذف الطلب رقم ${order.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </motion.tr>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+
+      {/* نافذة عرض تفاصيل الطلب */}
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <DialogContent dir="rtl" className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>تفاصيل الطلب رقم {selectedOrder?.id}</DialogTitle>
+            <DialogDescription>
+              {selectedOrder ? (
+                <>
+                  <p><strong>اسم العميل:</strong> {selectedOrder.customerInfo?.name || 'غير متوفر'}</p>
+                  <p><strong>البريد الإلكتروني:</strong> {selectedOrder.customerInfo?.email || 'غير متوفر'}</p>
+                  <p><strong>الهاتف:</strong> {selectedOrder.customerInfo?.phone || 'غير متوفر'}</p>
+                  <p><strong>تاريخ الطلب:</strong> {new Date(selectedOrder.createdAt).toLocaleString('ar-EG')}</p>
+                  <p><strong>الإجمالي:</strong> {(selectedOrder.totalAmount || 0).toLocaleString('ar-EG')} ج.م</p>
+                  <p><strong>العنوان:</strong> {selectedOrder.shippingAddress || 'غير متوفر'}</p>
+                  <hr className="my-3" />
+                  <h3 className="font-semibold mb-2">المنتجات:</h3>
+                  <ul className="list-disc list-inside max-h-48 overflow-auto">
+                    {selectedOrder.products?.map((prod, idx) => (
+                      <li key={idx}>
+                        {prod.name} - الكمية: {prod.quantity} - السعر: {(prod.price || 0).toLocaleString('ar-EG')} ج.م
+                      </li>
+                    )) || 'لا توجد منتجات'}
+                  </ul>
+                </>
+              ) : (
+                <p>لم يتم تحديد طلب.</p>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setIsViewModalOpen(false)}>إغلاق</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* نافذة تأكيد الحذف */}
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>هل أنت متأكد من حذف الطلب؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              حذف الطلب رقم {orderToDelete?.id} سيؤدي إلى إزالة كل بياناته نهائياً ولا يمكن التراجع عن ذلك.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setIsDeleteAlertOpen(false)}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={executeDeleteOrder} className="bg-red-600 hover:bg-red-700">
+              حذف الطلب
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 };
