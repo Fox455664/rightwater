@@ -269,7 +269,7 @@ const AdminDashboardPage = () => {
                                   <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
                                     <span className="text-white font-bold">#{index + 1}</span>
                                   </div>
-                                  <<span className="font-semibold text-white">{product.name}</span>
+                                 <span className="font-semibold text-white">{product.name}</span>
                                 </div>
                                 <div className="text-right">
                                   <p className="font-bold text-yellow-400">{product.sales || 0} مبيعات</p>
