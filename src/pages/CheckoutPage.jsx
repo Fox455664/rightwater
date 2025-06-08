@@ -287,7 +287,7 @@ const CheckoutPage = () => {
               {cartItems.map(item => (
                 <div key={item.id} className="flex justify-between items-center border-b pb-2">
                   <div className="text-sm">
-                    <{cartItems.map(item => (
+                    {cartItems.map(item => (
                 <div key={item.id} className="flex justify-between items-center border-b pb-2">
                   <div className="text-sm">
                     <p className="font-medium">{item.name}</p>
