@@ -308,3 +308,12 @@ const CheckoutPage = () => {
     <span>{total.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</span>
   </div>
 </CardContent>
+)}
+          </Card>
+        </motion.div>
+      </div>
+    </div>
+  );
+};
+
+export default CheckoutPage;
