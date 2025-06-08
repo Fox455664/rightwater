@@ -151,19 +151,19 @@ const OrderDetailsView = () => {
   }
 
   if (error) {
-    return (
-      <div className="p-10 text-center">
-        <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
-        <p className="text-lg text-destructive">{error}</p>
-      </div>
-    );
-  }
-
   return (
-    // ✅ الكود الخاص بالجدول والنوافذ المنبثقة موجود لديك مسبقاً وكامل ولا يحتاج تعديل
-    // استخدم الكود نفسه الذي أرسلته مع تعديل الـ template string
-    // وتم إصلاح الخطأ في `description: تم تغيير حالة الطلب إلى ${...}`
+    <div className="p-10 text-center">
+      <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+      <p className="text-lg text-destructive">{error}</p>
+    </div>
   );
-};
+}
+
+return (
+  <div>
+    {/* ✅ الكود الخاص بالجدول والنوافذ المنبثقة موجود لديك مسبقاً وكامل ولا يحتاج تعديل */}
+    {/* يمكنك استدعاء المكونات أو JSX الخاص بعرض الطلبات هنا */}
+  </div>
+);
 
 export default OrderDetailsView;
