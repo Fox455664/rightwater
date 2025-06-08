@@ -279,34 +279,44 @@ const CheckoutPage = () => {
           animate={{ opacity: 1, x: 0 }} 
           className="sticky top-24"
         >
-          <Card className="p-6 shadow-xl rounded-xl bg-card">
-            <CardHeader>
-              <CardTitle className="text-center text-lg font-semibold text-primary">ملخص الطلب</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-              {cartItems.map(item => (
-                <div key={item.id} className="flex justify-between items-center border-b pb-2">
-                  <div className="text-sm">
-                    {cartItems.map(item => (
-                <div key={item.id} className="flex justify-between items-center border-b pb-2">
-                  <div className="text-sm">
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-muted-foreground">الكمية: {item.quantity}</p>
-                  </div>
-                  <p className="font-semibold">
-                    {(item.price * item.quantity).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}
-                  </p>
-                </div>
-              ))}
+                 <Card className="p-6 shadow-xl rounded-xl bg-card">
+          <CardHeader>
+            <CardTitle className="text-center text-lg font-semibold text-primary">
+              ملخص الطلب
+            </CardTitle>
+          </CardHeader>
 
-              <div className="border-t mt-4 pt-4 flex justify-between font-bold text-lg text-primary">
-                <span>الإجمالي</span>
-                <span>{total.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</span>
+          <CardContent className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+            {cartItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex justify-between items-center border-b pb-2"
+              >
+                <div className="text-sm">
+                  <p className="font-medium">{item.name}</p>
+                  <p className="text-muted-foreground">الكمية: {item.quantity}</p>
+                </div>
+                <p className="font-semibold">
+                  {(item.price * item.quantity).toLocaleString("ar-EG", {
+                    style: "currency",
+                    currency: "EGP",
+                  })}
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
+            ))}
+
+            <div className="border-t mt-4 pt-4 flex justify-between font-bold text-lg text-primary">
+              <span>الإجمالي</span>
+              <span>
+                {total.toLocaleString("ar-EG", {
+                  style: "currency",
+                  currency: "EGP",
+                })}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 };
