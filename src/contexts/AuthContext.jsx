@@ -6,9 +6,12 @@ import {
   updatePassword as firebaseUpdatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
-  updateProfile
+  updateProfile,
+  updateEmail,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/firebase';
 import { Loader2 } from 'lucide-react';
 
@@ -20,7 +23,7 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserData, setCurrentUserData] = useState(null); // بيانات إضافية من Firestore
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,14 +32,14 @@ export function AuthProvider({ children }) {
 
       if (user) {
         try {
-          const adminDoc = await getDoc(doc(db, "admins", user.uid));
-          setIsAdmin(adminDoc.exists());
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          setCurrentUserData(userDoc.exists() ? userDoc.data() : null);
         } catch (error) {
-          console.error("خطأ في التحقق من الصلاحيات:", error);
-          setIsAdmin(false);
+          console.error("خطأ في جلب بيانات المستخدم:", error);
+          setCurrentUserData(null);
         }
       } else {
-        setIsAdmin(false);
+        setCurrentUserData(null);
       }
 
       setLoading(false);
@@ -68,29 +71,56 @@ export function AuthProvider({ children }) {
     return reauthenticateWithCredential(currentUser, credential);
   };
 
-  // دالة تحديث بيانات الملف الشخصي (مثل displayName)
+  // تحديث بيانات الملف الشخصي (مثل displayName ورقم الهاتف في Firestore)
   const updateUserProfile = async (updates) => {
     if (!currentUser) {
       return Promise.reject(new Error("لا يوجد مستخدم حالياً."));
     }
     try {
-      await updateProfile(currentUser, updates);
-      // تحديث حالة المستخدم الحالية بعد التعديل
+      if (updates.displayName) {
+        await updateProfile(currentUser, { displayName: updates.displayName });
+      }
+      if (updates.phone) {
+        await setDoc(doc(db, "users", currentUser.uid), { phone: updates.phone }, { merge: true });
+        setCurrentUserData(prev => ({ ...prev, phone: updates.phone }));
+      }
       setCurrentUser({ ...auth.currentUser });
     } catch (error) {
       return Promise.reject(error);
     }
   };
 
+  // تحديث البريد الإلكتروني مع إعادة المصادقة
+  const updateUserEmail = async (newEmail, currentPassword) => {
+    if (!currentUser) {
+      return Promise.reject(new Error("لا يوجد مستخدم حالياً."));
+    }
+    try {
+      await reauthenticateUser(currentPassword);
+      await updateEmail(currentUser, newEmail);
+      setCurrentUser({ ...auth.currentUser });
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  };
+
+  // تسجيل الدخول عبر Google OAuth
+  const signInWithGoogle = () => {
+    const provider = new GoogleAuthProvider();
+    return signInWithPopup(auth, provider);
+  };
+
   const value = {
     currentUser,
-    isAdmin,
+    currentUserData,
     loading,
     signOut,
     sendPasswordReset,
     updateUserPassword,
     reauthenticateUser,
-    updateUserProfile,  // أضفنا الدالة هنا
+    updateUserProfile,
+    updateUserEmail,
+    signInWithGoogle,
   };
 
   if (loading) {
