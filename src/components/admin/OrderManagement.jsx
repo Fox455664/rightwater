@@ -1,518 +1,279 @@
 import React, { useState, useEffect } from 'react';
+import { db } from '@/firebase';
+import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Eye, Trash2, PackageCheck, PackageX, Truck, Loader2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { collection, getDocs, updateDoc, doc, deleteDoc, query, limit, startAfter, orderBy } from 'firebase/firestore';
-import { db } from '@/firebase'; // عدل حسب مسار ملف firebase.js
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import {
-  Search,
-  Filter,
-  Eye,
-  Edit,
-  Trash2,
-  Package,
-  Clock,
-  CheckCircle,
-  XCircle,
-  TrendingUp,
-  DollarSign,
-  ShoppingCart
-} from 'lucide-react';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
-const PAGE_SIZE = 5;
+const statusOptions = [
+  { value: 'pending', label: 'قيد الانتظار', icon: <Loader2 className="h-4 w-4 text-yellow-500" /> },
+  { value: 'processing', label: 'قيد المعالجة', icon: <Truck className="h-4 w-4 text-blue-500" /> },
+  { value: 'shipped', label: 'تم الشحن', icon: <Truck className="h-4 w-4 text-sky-500" /> },
+  { value: 'delivered', label: 'تم التسليم', icon: <PackageCheck className="h-4 w-4 text-green-500" /> },
+  { value: 'cancelled', label: 'ملغي', icon: <PackageX className="h-4 w-4 text-red-500" /> },
+];
 
-const i18n = {
-  ar: {
-    totalOrders: 'إجمالي الطلبات',
-    totalRevenue: 'إجمالي الإيرادات',
-    pendingOrders: 'طلبات في الانتظار',
-    completedOrders: 'طلبات مكتملة',
-    searchPlaceholder: 'البحث في الطلبات...',
-    all: 'الكل',
-    pending: 'في الانتظار',
-    processing: 'قيد المعالجة',
-    completed: 'مكتمل',
-    cancelled: 'ملغي',
-    updateStatusSuccess: (id, status) => `تم تغيير حالة الطلب ${id} إلى ${status}`,
-    deleteOrderSuccess: (id) => `تم حذف الطلب ${id} بنجاح`,
-    confirmDeleteTitle: 'تأكيد الحذف',
-    confirmDeleteDesc: 'هل أنت متأكد من حذف هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء.',
-    confirm: 'تأكيد',
-    cancel: 'إلغاء',
-    noOrdersFound: 'لا توجد طلبات مطابقة للبحث',
-    viewOrder: 'عرض الطلب',
-    updateStatusProcessing: 'معالجة',
-    updateStatusCompleted: 'إكمال',
-    updateStatusCancel: 'إلغاء',
-    nextPage: 'التالي',
-    prevPage: 'السابق',
-    statusPending: 'في الانتظار',
-    statusProcessing: 'قيد المعالجة',
-    statusCompleted: 'مكتمل',
-    statusCancelled: 'ملغي',
-  },
-  en: {
-    // ممكن تضيف ترجمة إنجليزية هنا لو حبيت
+const getStatusStyles = (status) => {
+  switch (status) {
+    case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+    case 'processing': return 'bg-blue-100 text-blue-700 border-blue-300';
+    case 'shipped': return 'bg-sky-100 text-sky-700 border-sky-300';
+    case 'delivered': return 'bg-green-100 text-green-700 border-green-300';
+    case 'cancelled': return 'bg-red-100 text-red-700 border-red-300';
+    default: return 'bg-gray-100 text-gray-700 border-gray-300';
   }
 };
 
-const OrderManagement = ({ onViewOrder, lang = 'ar' }) => {
-  const t = i18n[lang];
+const OrderManagement = () => {
   const [orders, setOrders] = useState([]);
-  const [filteredOrders, setFilteredOrders] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [loading, setLoading] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [orderToDelete, setOrderToDelete] = useState(null);
-  const [selectedOrder, setSelectedOrder] = useState(null); // عرض تفاصيل الطلب
-  const [paginationCursor, setPaginationCursor] = useState(null);
-  const [lastVisibleDoc, setLastVisibleDoc] = useState(null);
-  const [page, setPage] = useState(1);
-
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const { toast } = useToast();
-
-  // تحميل الطلبات من Firestore مع Pagination
-  const loadOrders = async (cursor = null) => {
-    setLoading(true);
-    try {
-      let q = query(
-        collection(db, 'orders'),
-        orderBy('createdAt', 'desc'),
-        limit(PAGE_SIZE)
-      );
-      if (cursor) {
-        q = query(
-          collection(db, 'orders'),
-          orderBy('createdAt', 'desc'),
-          startAfter(cursor),
-          limit(PAGE_SIZE)
-        );
-      }
-
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const fetchedOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setOrders(fetchedOrders);
-        setFilteredOrders(fetchedOrders);
-        setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
-      } else {
-        setOrders([]);
-        setFilteredOrders([]);
-        setLastVisibleDoc(null);
-      }
-    } catch (error) {
-      console.error('Error loading orders:', error);
-      toast({
-        title: 'حدث خطأ أثناء تحميل الطلبات',
-        description: error.message
-      });
-    }
-    setLoading(false);
-  };
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
   useEffect(() => {
-    loadOrders();
+    const fetchOrders = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const ordersCollection = collection(db, 'orders');
+        const orderSnapshot = await getDocs(ordersCollection);
+        const orderList = orderSnapshot.docs.map(doc => {
+          const data = doc.data();
+          const date = data.date?.seconds ? new Date(data.date.seconds * 1000) : new Date(data.date);
+          return {
+            id: doc.id,
+            ...data,
+            date,
+          };
+        });
+        setOrders(orderList);
+      } catch (err) {
+        console.error("Error fetching orders: ", err);
+        setError("حدث خطأ أثناء تحميل الطلبات.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
   }, []);
 
-  useEffect(() => {
-    applyFilters();
-  }, [orders, searchTerm, statusFilter]);
-
-  // فلترة الطلبات محلياً بعد جلبها
-  const applyFilters = () => {
-    let filtered = orders;
-
-    if (searchTerm) {
-      filtered = filtered.filter(order =>
-        order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.customerEmail.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(order => order.status === statusFilter);
-    }
-
-    setFilteredOrders(filtered);
-  };
-
-  // تحديث حالة الطلب في Firestore
-  const updateOrderStatus = async (orderId, newStatus) => {
-    setLoading(true);
+  const handleStatusChange = async (orderId, newStatus) => {
     try {
       const orderRef = doc(db, 'orders', orderId);
       await updateDoc(orderRef, { status: newStatus });
-      // تحديث محلي
-      const updatedOrders = orders.map(order =>
-        order.id === orderId ? { ...order, status: newStatus } : order
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId ? { ...order, status: newStatus } : order
+        )
       );
-      setOrders(updatedOrders);
       toast({
-        title: "تم تحديث حالة الطلب",
-        description: t.updateStatusSuccess(orderId, t[`status${capitalize(newStatus)}`]),
+        title: "✅ تم تحديث حالة الطلب",
+        description: `تم تغيير حالة الطلب إلى ${statusOptions.find(s => s.value === newStatus)?.label || newStatus}.`,
+        className: "bg-green-500 text-white"
       });
     } catch (error) {
       toast({
-        title: 'حدث خطأ أثناء تحديث الحالة',
-        description: error.message
+        title: "❌ فشل تحديث الحالة",
+        description: "حصل خطأ أثناء تحديث حالة الطلب. حاول مرة أخرى.",
+        className: "bg-red-500 text-white"
       });
     }
-    setLoading(false);
   };
 
-  // حذف الطلب مع تأكيد
-  const confirmDeleteOrder = (order) => {
-    setOrderToDelete(order);
-    setIsDeleteDialogOpen(true);
-  };
-
-  const deleteOrder = async () => {
-    if (!orderToDelete) return;
-    setLoading(true);
+  const handleDeleteOrder = async (orderId) => {
     try {
-      const orderRef = doc(db, 'orders', orderToDelete.id);
-      await deleteDoc(orderRef);
-
-      const updatedOrders = orders.filter(order => order.id !== orderToDelete.id);
-      setOrders(updatedOrders);
-      setIsDeleteDialogOpen(false);
-      setOrderToDelete(null);
-
+      await deleteDoc(doc(db, 'orders', orderId));
+      setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
       toast({
-        title: "تم حذف الطلب",
-        description: t.deleteOrderSuccess(orderToDelete.id),
+        title: "🗑️ تم حذف الطلب",
+        description: `تم حذف الطلب ${orderId} بنجاح.`,
+        className: "bg-red-500 text-white"
       });
     } catch (error) {
       toast({
-        title: 'حدث خطأ أثناء حذف الطلب',
-        description: error.message
+        title: "❌ فشل حذف الطلب",
+        description: "حصل خطأ أثناء حذف الطلب. حاول مرة أخرى.",
+        className: "bg-red-500 text-white"
       });
     }
-    setLoading(false);
   };
 
-  // عرض الأيقونات والألوان للحالة
-  const getStatusText = (status) => {
-    return t[`status${capitalize(status)}`] || status;
+  const handleViewOrder = (order) => {
+    setSelectedOrder(order);
+    setIsViewModalOpen(true);
   };
 
-  const getStatusIcon = (status) => {
-    const iconMap = {
-      pending: <Clock className="w-4 h-4" />,
-      processing: <Package className="w-4 h-4" />,
-      completed: <CheckCircle className="w-4 h-4" />,
-      cancelled: <XCircle className="w-4 h-4" />
-    };
-    return iconMap[status];
-  };
-
-  const getStatusColor = (status) => {
-    const colorMap = {
-      pending: 'status-pending',
-      processing: 'status-processing',
-      completed: 'status-completed',
-      cancelled: 'status-cancelled'
-    };
-    return colorMap[status];
-  };
-
-  // حساب الإحصائيات
-  const calculateStats = () => {
-    const totalOrders = orders.length;
-    const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
-    const pendingOrders = orders.filter(order => order.status === 'pending').length;
-    const completedOrders = orders.filter(order => order.status === 'completed').length;
-
-    return { totalOrders, totalRevenue, pendingOrders, completedOrders };
-  };
-
-  const stats = calculateStats();
-
-  // مساعدة لتحويل الحروف الأولى لكابيتال
-  function capitalize(str) {
-    if (!str) return '';
-    return str.charAt(0).toUpperCase() + str.slice(1);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-10">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-4 text-lg text-muted-foreground">جاري تحميل الطلبات...</p>
+      </div>
+    );
   }
 
-  // تغيير الصفحة التالية مع تحميل بيانات جديدة
-  const handleNextPage = () => {
-    if (!lastVisibleDoc) return;
-    setPage(page + 1);
-    loadOrders(lastVisibleDoc);
-  };
-
-  // لتبسيط الكود للصفحة السابقة، ممكن تضيف تخزين الـ cursors للصفحات السابقة، لكن الآن نعيد تحميل الصفحة الأولى فقط:
-  const handlePrevPage = () => {
-    if (page === 1) return;
-    setPage(page - 1);
-    loadOrders(); // تحميل أول صفحة
-  };
+  if (error) {
+    return (
+      <div className="p-10 text-center">
+        <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+        <p className="text-lg text-destructive">{error}</p>
+        <Button onClick={() => window.location.reload()} className="mt-4">حاول مرة أخرى</Button>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* إحصائيات */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <Card className="glass-effect card-hover neon-glow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t.totalOrders}</p>
-                  <p className="text-2xl font-bold text-blue-400">{stats.totalOrders}</p>
-                </div>
-                <ShoppingCart className="w-8 h-8 text-blue-400" />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-        >
-          <Card className="glass-effect card-hover neon-glow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t.totalRevenue}</p>
-                  <p className="text-2xl font-bold text-green-400">${stats.totalRevenue.toFixed(2)}</p>
-                </div>
-                <DollarSign className="w-8 h-8 text-green-400" />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <Card className="glass-effect card-hover neon-glow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t.pendingOrders}</p>
-                  <p className="text-2xl font-bold text-yellow-400">{stats.pendingOrders}</p>
-                </div>
-                <Clock className="w-8 h-8 text-yellow-400" />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card className="glass-effect card-hover neon-glow">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">{t.completedOrders}</p>
-                  <p className="text-2xl font-bold text-green-500">{stats.completedOrders}</p>
-                </div>
-                <CheckCircle className="w-8 h-8 text-green-500" />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-
-      {/* فلترة وبحث */}
-      <div className="flex flex-col md:flex-row items-center gap-4">
-        <Input
-          placeholder={t.searchPlaceholder}
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="flex-grow"
-          disabled={loading}
-          icon={<Search className="w-5 h-5 text-gray-400" />}
-        />
-        <select
-          className="border rounded p-2"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          disabled={loading}
-          aria-label="Filter orders by status"
-        >
-          <option value="all">{t.all}</option>
-          <option value="pending">{t.pending}</option>
-          <option value="processing">{t.processing}</option>
-          <option value="completed">{t.completed}</option>
-          <option value="cancelled">{t.cancelled}</option>
-        </select>
-      </div>
-
-      {/* جدول الطلبات */}
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse border border-gray-300 text-right">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-3 border border-gray-300">رقم الطلب</th>
-              <th className="p-3 border border-gray-300">العميل</th>
-              <th className="p-3 border border-gray-300">البريد الإلكتروني</th>
-              <th className="p-3 border border-gray-300">الإجمالي</th>
-              <th className="p-3 border border-gray-300">الحالة</th>
-              <th className="p-3 border border-gray-300">الإجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredOrders.length === 0 && (
-              <tr>
-                <td colSpan={6} className="text-center p-4 text-gray-500">
-                  {t.noOrdersFound}
-                </td>
-              </tr>
-            )}
-
-            <AnimatePresence>
-              {filteredOrders.map(order => (
-                <motion.tr
-                  key={order.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.3 }}
-                  className="hover:bg-gray-50"
-                >
-                  <td className="p-3 border border-gray-300">{order.id}</td>
-                  <td className="p-3 border border-gray-300">{order.customerName}</td>
-                  <td className="p-3 border border-gray-300">{order.customerEmail}</td>
-                  <td className="p-3 border border-gray-300">${order.total.toFixed(2)}</td>
-                  <td className="p-3 border border-gray-300">
-                    <Badge className={`flex items-center gap-1 ${getStatusColor(order.status)}`}>
-                      {getStatusIcon(order.status)}
-                      {getStatusText(order.status)}
-                    </Badge>
-                  </td>
-                  <td className="p-3 border border-gray-300 space-x-2 rtl:space-x-reverse">
-                    <Button size="sm" variant="outline" onClick={() => setSelectedOrder(order)} disabled={loading}>
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                    {order.status === 'pending' && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => updateOrderStatus(order.id, 'processing')}
-                        disabled={loading}
-                        title={t.updateStatusProcessing}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6"
+    >
+      <h2 className="text-2xl font-semibold text-primary">إدارة الطلبات</h2>
+      {orders.length === 0 ? (
+        <p className="text-muted-foreground text-center py-8">لا توجد طلبات لعرضها حالياً.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-border shadow-sm bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="text-right">رقم الطلب</TableHead>
+                <TableHead className="text-right">اسم العميل</TableHead>
+                <TableHead className="text-right">التاريخ</TableHead>
+                <TableHead className="text-right">الإجمالي (ج.م)</TableHead>
+                <TableHead className="text-right">الحالة</TableHead>
+                <TableHead className="text-center">الإجراءات</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <AnimatePresence>
+                {orders.map((order) => (
+                  <motion.tr
+                    key={order.id}
+                    layout
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="hover:bg-muted/30 transition-colors"
+                  >
+                    <TableCell className="font-medium text-primary">{order.id}</TableCell>
+                    <TableCell>{order.customerName}</TableCell>
+                    <TableCell>{order.date.toLocaleDateString('ar-EG')}</TableCell>
+                    <TableCell>{order.total.toLocaleString('ar-EG')}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={order.status}
+                        onValueChange={(newStatus) => handleStatusChange(order.id, newStatus)}
                       >
-                        <Package className="w-4 h-4" />
-                      </Button>
-                    )}
-                    {order.status === 'processing' && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => updateOrderStatus(order.id, 'completed')}
-                        disabled={loading}
-                        title={t.updateStatusCompleted}
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                      </Button>
-                    )}
-                    {order.status !== 'cancelled' && order.status !== 'completed' && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                        disabled={loading}
-                        title={t.updateStatusCancel}
-                      >
-                        <XCircle className="w-4 h-4" />
-                      </Button>
-                    )}
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => confirmDeleteOrder(order)}
-                      disabled={loading}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </td>
-                </motion.tr>
-              ))}
-            </AnimatePresence>
-          </tbody>
-        </table>
-      </div>
-
-      {/* أزرار التنقل بين الصفحات */}
-      <div className="flex justify-between mt-4">
-        <Button onClick={handlePrevPage} disabled={page === 1 || loading}>
-          {t.prevPage}
-        </Button>
-        <div className="text-gray-700">
-          صفحة {page}
+                        <SelectTrigger className={`w-[150px] text-xs h-9 ${getStatusStyles(order.status)}`}>
+                          <div className="flex items-center">
+                            {statusOptions.find(s => s.value === order.status)?.icon}
+                            <span className="mr-2"><SelectValue /></span>
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statusOptions.map(option => (
+                            <SelectItem key={option.value} value={option.value} className="text-xs">
+                              <div className="flex items-center">
+                                {option.icon} <span className="mr-2">{option.label}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex justify-center items-center space-x-1 space-x-reverse">
+                        <Button variant="ghost" size="icon" className="text-blue-500 hover:text-blue-700" onClick={() => handleViewOrder(order)}>
+                          <Eye className="h-5 w-5" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700">
+                              <Trash2 className="h-5 w-5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="text-right">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>هل أنت متأكد من حذف هذا الطلب؟</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                هذا الإجراء لا يمكن التراجع عنه. سيتم حذف الطلب ({order.id}) بشكل دائم.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="flex-row-reverse">
+                              <AlertDialogAction onClick={() => handleDeleteOrder(order.id)} className="bg-destructive hover:bg-destructive/90">
+                                نعم، حذف الطلب
+                              </AlertDialogAction>
+                              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                      </TableCell>
+                  </motion.tr>
+                ))}
+              </AnimatePresence>
+            </TableBody>
+          </Table>
         </div>
-        <Button onClick={handleNextPage} disabled={!lastVisibleDoc || loading}>
-          {t.nextPage}
-        </Button>
-      </div>
+      )}
 
-      {/* حوار تفاصيل الطلب */}
-      <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{t.viewOrder} #{selectedOrder?.id}</DialogTitle>
-          </DialogHeader>
-          {selectedOrder && (
-            <div className="space-y-4">
-              <p><strong>اسم العميل:</strong> {selectedOrder.customerName}</p>
-              <p><strong>البريد الإلكتروني:</strong> {selectedOrder.customerEmail}</p>
-              <p><strong>الهاتف:</strong> {selectedOrder.customerPhone}</p>
-              <p><strong>العنوان:</strong> {selectedOrder.customerAddress}</p>
-              <p><strong>حالة الطلب:</strong> {getStatusText(selectedOrder.status)}</p>
-              <p><strong>إجمالي الطلب:</strong> ${selectedOrder.total.toFixed(2)}</p>
-              <div>
-                <strong>المنتجات:</strong>
-                <ul className="list-disc list-inside">
-                  {selectedOrder.items?.map((item, idx) => (
-                    <li key={idx}>
-                      {item.name} - الكمية: {item.quantity} - السعر: ${item.price.toFixed(2)}
-                    </li>
-                  ))}
-                </ul>
+      {/* مودال عرض تفاصيل الطلب */}
+      <AnimatePresence>
+        {isViewModalOpen && selectedOrder && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setIsViewModalOpen(false)}
+          >
+            <motion.div
+              className="bg-white rounded-lg max-w-lg w-full p-6 shadow-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-xl font-semibold mb-4 text-right">تفاصيل الطلب: {selectedOrder.id}</h3>
+              <div className="space-y-2 text-right">
+                <p><strong>اسم العميل:</strong> {selectedOrder.customerName}</p>
+                <p><strong>البريد الإلكتروني:</strong> {selectedOrder.email}</p>
+                <p><strong>رقم الهاتف:</strong> {selectedOrder.phone}</p>
+                <p><strong>العنوان:</strong> {selectedOrder.address}</p>
+                <p><strong>تاريخ الطلب:</strong> {selectedOrder.date.toLocaleString('ar-EG')}</p>
+                <p><strong>الحالة:</strong> {statusOptions.find(s => s.value === selectedOrder.status)?.label || selectedOrder.status}</p>
+                <p><strong>الإجمالي:</strong> {selectedOrder.total.toLocaleString('ar-EG')} ج.م</p>
+                <div>
+                  <strong>المنتجات:</strong>
+                  <ul className="list-disc list-inside max-h-40 overflow-y-auto mt-1">
+                    {selectedOrder.items?.map((item, idx) => (
+                      <li key={idx}>{item.name} - الكمية: {item.quantity} - السعر: {item.price.toLocaleString('ar-EG')} ج.م</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-              <Button onClick={() => setSelectedOrder(null)}>إغلاق</Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* حوار تأكيد الحذف */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t.confirmDeleteTitle}</DialogTitle>
-            <p>{t.confirmDeleteDesc}</p>
-          </DialogHeader>
-          <div className="flex justify-end gap-4 mt-4">
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              {t.cancel}
-            </Button>
-            <Button variant="destructive" onClick={deleteOrder} disabled={loading}>
-              {t.confirm}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+              <div className="mt-6 text-center">
+                <Button onClick={() => setIsViewModalOpen(false)}>إغلاق</Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 };
 
