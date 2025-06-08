@@ -8,9 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { db } from '@/firebase';
 import { collection, addDoc, Timestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import emailjs from '@emailjs/browser';
 import { useCart } from '@/contexts/CartContext';
-import { Loader2, Lock, ArrowRight, Info, ShoppingBag } from 'lucide-react';
+import { Loader2, Lock, ArrowRight, ShoppingBag } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const CheckoutPage = () => {
@@ -65,7 +66,21 @@ const CheckoutPage = () => {
 
     setIsSubmitting(true);
     try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        toast({
+          title: "يجب تسجيل الدخول",
+          description: "يرجى تسجيل الدخول لإتمام الطلب.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return navigate('/login'); // عدل حسب مسار صفحة تسجيل الدخول عندك
+      }
+
       const orderData = {
+        userId: currentUser.uid,  // معرف المستخدم مضاف هنا
         customerInfo: {
           name: `${formData.firstName} ${formData.lastName}`,
           email: formData.email,
@@ -90,6 +105,7 @@ const CheckoutPage = () => {
 
       const docRef = await addDoc(collection(db, 'orders'), orderData);
 
+      // تحديث المخزون
       for (const item of cartItems) {
         const productRef = doc(db, "products", item.id);
         const productSnap = await getDoc(productRef);
@@ -100,55 +116,51 @@ const CheckoutPage = () => {
         }
       }
 
+      // تحضير تفاصيل الطلب للإيميل
       const orderItemsHtml = cartItems.map(item => `
-  <tr>
-    <td style="padding:8px; border:1px solid #ddd;">${item.name}</td>
-    <td style="padding:8px; border:1px solid #ddd; text-align:center;">${item.quantity}</td>
-    <td style="padding:8px; border:1px solid #ddd; text-align:right;">
-      ${item.price.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}
-    </td>
-  </tr>
-`).join('');
+        <tr>
+          <td style="padding:8px; border:1px solid #ddd;">${item.name}</td>
+          <td style="padding:8px; border:1px solid #ddd; text-align:center;">${item.quantity}</td>
+          <td style="padding:8px; border:1px solid #ddd; text-align:right;">
+            ${item.price.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}
+          </td>
+        </tr>
+      `).join('');
 
-const baseEmailParams = {
-  to_name: `${formData.firstName} ${formData.lastName}`,
-  to_email: formData.email,
-  order_id: docRef.id,
-  order_total: total.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' }),
-  order_address: `${formData.address}, ${formData.city}${formData.postalCode ? ', ' + formData.postalCode : ''}, مصر`,
-  order_items_html: orderItemsHtml,
-  customer_phone: formData.phone,
-  payment_method: formData.paymentMethod === 'cod' ? "الدفع عند الاستلام" : formData.paymentMethod,
-};
+      const baseEmailParams = {
+        to_name: `${formData.firstName} ${formData.lastName}`,
+        to_email: formData.email,
+        order_id: docRef.id,
+        order_total: total.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' }),
+        order_address: `${formData.address}, ${formData.city}${formData.postalCode ? ', ' + formData.postalCode : ''}, مصر`,
+        order_items_html: orderItemsHtml,
+        customer_phone: formData.phone,
+        payment_method: formData.paymentMethod === 'cod' ? "الدفع عند الاستلام" : formData.paymentMethod,
+      };
 
-// 1. إرسال إيميل للعميل
-const clientEmailParams = {
-  ...baseEmailParams,
-  from_name: "متجر Right Water",
-  support_email: "rightwater156@gmail.com",  // بريد الدعم أو ثابت
-  // to_email و to_name موجودين في baseEmailParams
-};
+      // إيميل العميل
+      const clientEmailParams = {
+        ...baseEmailParams,
+        from_name: "متجر Right Water",
+        support_email: "rightwater156@gmail.com",
+      };
 
-// 2. إرسال إيميل للتاجر
-const merchantEmailParams = {
-  ...baseEmailParams,
-  to_email: "rightwater156@gmail.com",       // ليوصل الإيميل للتاجر
-  client_email: formData.email,              // بريد العميل الحقيقي
-  from_name: "Right Water - إشعار طلب جديد",
-  reply_to: formData.email                   // علشان لو ضغطت "رد"
-};
+      // إيميل التاجر
+      const merchantEmailParams = {
+        ...baseEmailParams,
+        to_email: "rightwater156@gmail.com",
+        client_email: formData.email,
+        from_name: "Right Water - إشعار طلب جديد",
+        reply_to: formData.email,
+      };
 
-try {
-  // إرسال إيميل العميل باستخدام قالب مخصص (مثلاً template_client)
-  await emailjs.send('service_0p2k5ih', 'template_bu792mf', clientEmailParams, 'xpSKf6d4h11LzEOLz');
-  
-  // إرسال إيميل التاجر باستخدام قالب مختلف (مثلاً template_merchant)
-  await emailjs.send('service_0p2k5ih', 'template_tboeo2t', merchantEmailParams, 'xpSKf6d4h11LzEOLz');
-
-  clearCart();
-} catch (error) {
-  console.error("حدث خطأ أثناء إرسال البريد الإلكتروني:", error);
-}
+      try {
+        await emailjs.send('service_0p2k5ih', 'template_bu792mf', clientEmailParams, 'xpSKf6d4h11LzEOLz');
+        await emailjs.send('service_0p2k5ih', 'template_tboeo2t', merchantEmailParams, 'xpSKf6d4h11LzEOLz');
+        clearCart();
+      } catch (emailError) {
+        console.error("حدث خطأ أثناء إرسال البريد الإلكتروني:", emailError);
+      }
 
       toast({
         title: "🎉 تم إرسال طلبك بنجاح!",
@@ -201,7 +213,6 @@ try {
 
   return (
     <div className="container mx-auto px-4 py-12">
-      {/* عنوان الصفحة */}
       <motion.h1 
         initial={{ opacity: 0, y: -10 }} 
         animate={{ opacity: 1, y: 0 }}
@@ -210,9 +221,7 @@ try {
         إتمام عملية الدفع
       </motion.h1>
 
-      {/* نموذج الدفع وملخص الطلب */}
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* نموذج الشحن */}
         <motion.form 
           onSubmit={handleSubmit}
           initial={{ opacity: 0, x: -20 }}
@@ -220,7 +229,6 @@ try {
           transition={{ delay: 0.1 }}
           className="lg:col-span-2 space-y-6 bg-card p-6 rounded-xl shadow-xl"
         >
-          {/* بيانات العميل */}
           <div className="grid md:grid-cols-2 gap-6">
             <div>
               <Label htmlFor="firstName">الاسم الأول</Label>
@@ -252,7 +260,6 @@ try {
             </div>
           </div>
 
-          {/* طريقة الدفع */}
           <div>
             <Label className="mb-2 block">طريقة الدفع</Label>
             <Label className="flex items-center gap-2 cursor-pointer">
@@ -267,7 +274,6 @@ try {
           </Button>
         </motion.form>
 
-        {/* ملخص الطلب */}
         <motion.div 
           initial={{ opacity: 0, x: 20 }} 
           animate={{ opacity: 1, x: 0 }} 
@@ -281,16 +287,20 @@ try {
               {cartItems.map(item => (
                 <div key={item.id} className="flex justify-between items-center border-b pb-2">
                   <div className="text-sm">
-                    <p className="font-semibold">{item.name}</p>
+                    <{cartItems.map(item => (
+                <div key={item.id} className="flex justify-between items-center border-b pb-2">
+                  <div className="text-sm">
+                    <p className="font-medium">{item.name}</p>
                     <p className="text-muted-foreground">الكمية: {item.quantity}</p>
                   </div>
-                  <p className="text-sm font-medium">
+                  <p className="font-semibold">
                     {(item.price * item.quantity).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}
                   </p>
                 </div>
               ))}
-              <div className="flex justify-between pt-3 border-t font-semibold">
-                <span>الإجمالي:</span>
+
+              <div className="border-t mt-4 pt-4 flex justify-between font-bold text-lg text-primary">
+                <span>الإجمالي</span>
                 <span>{total.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</span>
               </div>
             </CardContent>
