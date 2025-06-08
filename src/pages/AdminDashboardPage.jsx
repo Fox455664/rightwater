@@ -8,7 +8,6 @@ import ProductManagement from '@/components/admin/ProductManagement';
 import OrderDetailsView from '@/components/admin/OrderDetailsView';
 import { 
   BarChart3, 
-  TrendingUp, 
   Users, 
   Package, 
   DollarSign, 
@@ -39,22 +38,31 @@ const AdminDashboardPage = () => {
 
   const loadDashboardData = async () => {
     try {
-      // جلب الطلبات من Firestore
+      console.log('جلب الطلبات...');
       const ordersSnapshot = await getDocs(collection(db, 'orders'));
-      const orders = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const orders = ordersSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(0) // fallback لتاريخ افتراضي
+        };
+      });
+      console.log('تم جلب الطلبات:', orders.length);
 
-      // جلب المنتجات من Firestore
+      console.log('جلب المنتجات...');
       const productsSnapshot = await getDocs(collection(db, 'products'));
       const products = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      console.log('تم جلب المنتجات:', products.length);
 
       // حساب الإحصائيات
-      const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0);
+      const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
       const totalOrders = orders.length;
       const totalProducts = products.length;
       const totalCustomers = new Set(orders.map(order => order.customerEmail)).size;
 
       const recentOrders = orders
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, 5);
 
       const topProducts = products
@@ -221,9 +229,9 @@ const AdminDashboardPage = () => {
                                     size="sm"
                                     variant="outline"
                                     onClick={() => handleViewOrder(order)}
-                                    className="mt-1"
+                                    className="flex items-center space-x-1 space-x-reverse text-blue-400 hover:text-blue-600"
                                   >
-                                    <Eye className="w-3 h-3 mr-1" />
+                                    <Eye className="w-4 h-4" />
                                     عرض
                                   </Button>
                                 </div>
@@ -232,7 +240,7 @@ const AdminDashboardPage = () => {
                           </motion.div>
                         ))}
                         {dashboardStats.recentOrders.length === 0 && (
-                          <p className="text-center text-gray-400 py-8">لا توجد طلبات حديثة</p>
+                          <p className="text-gray-400 text-center py-4">لا توجد طلبات حديثة</p>
                         )}
                       </div>
                     </CardContent>
@@ -242,14 +250,14 @@ const AdminDashboardPage = () => {
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.6 }}
+                  transition={{ delay: 0.7 }}
                 >
                   <Card className="glass-effect neon-glow">
                     <CardHeader>
                       <CardTitle className="flex items-center space-x-2 space-x-reverse">
                         <Star className="w-5 h-5 text-yellow-400" />
                         <span className="bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
-                          أفضل المنتجات
+                          أكثر المنتجات مبيعًا
                         </span>
                       </CardTitle>
                     </CardHeader>
@@ -260,26 +268,20 @@ const AdminDashboardPage = () => {
                             key={product.id}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.7 + index * 0.1 }}
+                            transition={{ delay: 0.8 + index * 0.1 }}
                             className="gradient-border"
                           >
-                            <div className="gradient-border-content">
-                              <div className="flex items-center justify-between p-3">
-                                <div className="flex items-center space-x-3 space-x-reverse">
-                                  <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center">
-                                    <span className="text-white font-bold">#{index + 1}</span>
-                                  </div>
-                                 <span className="font-semibold text-white">{product.name}</span>
-                                </div>
-                                <div className="text-right">
-                                  <p className="font-bold text-yellow-400">{product.sales || 0} مبيعات</p>
-                                </div>
+                            <div className="gradient-border-content p-3 flex items-center justify-between">
+                              <div>
+                                <p className="font-semibold text-white">{product.name}</p>
+                                <p className="text-sm text-gray-300">{product.category}</p>
                               </div>
+                              <p className="font-bold text-yellow-400">{product.sales || 0} مبيعات</p>
                             </div>
                           </motion.div>
                         ))}
                         {dashboardStats.topProducts.length === 0 && (
-                          <p className="text-center text-gray-400 py-8">لا توجد منتجات مباعة</p>
+                          <p className="text-gray-400 text-center py-4">لا توجد بيانات لعرضها</p>
                         )}
                       </div>
                     </CardContent>
@@ -288,28 +290,25 @@ const AdminDashboardPage = () => {
               </div>
             </TabsContent>
 
-            <TabsContent value="orders">
-              <OrderManagement
-                onViewOrder={handleViewOrder}
-                onRefresh={loadDashboardData}
-              />
+            <TabsContent value="orders" className="space-y-6">
+              <OrderManagement onViewOrder={handleViewOrder} />
             </TabsContent>
 
-            <TabsContent value="order-details">
+            <TabsContent value="order-details" className="space-y-6">
               {selectedOrder ? (
                 <>
-                  <Button variant="outline" onClick={handleBackToOrders} className="mb-4">
-                    العودة إلى الطلبات
+                  <Button variant="ghost" onClick={handleBackToOrders}>
+                    ← رجوع للطلبات
                   </Button>
                   <OrderDetailsView order={selectedOrder} />
                 </>
               ) : (
-                <p>لم يتم اختيار طلب لعرض التفاصيل</p>
+                <p>لم يتم اختيار طلب لعرض التفاصيل.</p>
               )}
             </TabsContent>
 
-            <TabsContent value="products">
-              <ProductManagement onRefresh={loadDashboardData} />
+            <TabsContent value="products" className="space-y-6">
+              <ProductManagement />
             </TabsContent>
           </AnimatePresence>
         </Tabs>
