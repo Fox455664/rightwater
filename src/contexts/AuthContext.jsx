@@ -24,6 +24,7 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentUserData, setCurrentUserData] = useState(null); // بيانات إضافية من Firestore
+  const [isAdmin, setIsAdmin] = useState(false); // حالة تحقق الادمن
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,13 +34,17 @@ export function AuthProvider({ children }) {
       if (user) {
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
-          setCurrentUserData(userDoc.exists() ? userDoc.data() : null);
+          const userData = userDoc.exists() ? userDoc.data() : null;
+          setCurrentUserData(userData);
+          setIsAdmin(userData?.role === "admin");  // تحقق من الادمن
         } catch (error) {
           console.error("خطأ في جلب بيانات المستخدم:", error);
           setCurrentUserData(null);
+          setIsAdmin(false);
         }
       } else {
         setCurrentUserData(null);
+        setIsAdmin(false);
       }
 
       setLoading(false);
@@ -71,7 +76,6 @@ export function AuthProvider({ children }) {
     return reauthenticateWithCredential(currentUser, credential);
   };
 
-  // تحديث بيانات الملف الشخصي (مثل displayName ورقم الهاتف في Firestore)
   const updateUserProfile = async (updates) => {
     if (!currentUser) {
       return Promise.reject(new Error("لا يوجد مستخدم حالياً."));
@@ -90,7 +94,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // تحديث البريد الإلكتروني مع إعادة المصادقة
   const updateUserEmail = async (newEmail, currentPassword) => {
     if (!currentUser) {
       return Promise.reject(new Error("لا يوجد مستخدم حالياً."));
@@ -104,7 +107,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // تسجيل الدخول عبر Google OAuth
   const signInWithGoogle = () => {
     const provider = new GoogleAuthProvider();
     return signInWithPopup(auth, provider);
@@ -113,6 +115,7 @@ export function AuthProvider({ children }) {
   const value = {
     currentUser,
     currentUserData,
+    isAdmin,
     loading,
     signOut,
     sendPasswordReset,
