@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '@/firebase';
-import { collection, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, Trash2, PackageCheck, PackageX, Truck, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Eye, Trash2, PackageCheck, PackageX, Truck, Loader2, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/components/ui/use-toast';
 import {
@@ -38,66 +38,6 @@ const getStatusStyles = (status) => {
   }
 };
 
-const OrderDetailsModal = ({ order, isOpen, onClose }) => {
-  if (!isOpen || !order) return null;
-
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={onClose}
-        >
-          <motion.div
-            className="bg-white rounded-lg max-w-lg w-full p-6 shadow-lg text-right"
-            onClick={(e) => e.stopPropagation()}
-            tabIndex={-1}
-          >
-            <h3 className="text-xl font-semibold mb-4">تفاصيل الطلب رقم {order.id}</h3>
-            <p><strong>اسم العميل:</strong> {order.customerName || 'غير متوفر'}</p>
-            <p><strong>البريد الإلكتروني:</strong> {order.email || 'غير متوفر'}</p>
-            <p><strong>الهاتف:</strong> {order.phone || 'غير متوفر'}</p>
-            <p><strong>العنوان:</strong> {order.address || 'غير متوفر'}</p>
-            <p><strong>تاريخ الطلب:</strong> {order.date?.toLocaleString('ar-EG') || 'غير متوفر'}</p>
-            <p><strong>الحالة:</strong> {statusOptions.find(s => s.value === order.status)?.label || order.status}</p>
-            <p><strong>الإجمالي:</strong> {order.total?.toLocaleString('ar-EG') || 0} ج.م</p>
-
-            <div className="mt-4">
-              <strong>المنتجات:</strong>
-              {order.items && order.items.length > 0 ? (
-                <ul className="list-disc list-inside max-h-40 overflow-y-auto mt-1">
-                  {order.items.map((item, idx) => (
-                    <li key={idx} className="flex items-center space-x-4 space-x-reverse">
-                      {item.image ? (
-                        <img src={item.image} alt={item.name} className="w-12 h-12 object-cover rounded" />
-                      ) : (
-                        <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-gray-500">لا صورة</div>
-                      )}
-                      <div className="flex flex-col">
-                        <span>{item.name || 'بدون اسم'}</span>
-                        <span className="text-sm text-muted-foreground">الكمية: {item.quantity || 0} - السعر: {(item.price || 0).toLocaleString('ar-EG')} ج.م</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground mt-1">لا توجد منتجات</p>
-              )}
-            </div>
-
-            <div className="mt-6 text-center">
-              <Button onClick={onClose}>إغلاق</Button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-};
-
 const OrderManagement = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -105,17 +45,15 @@ const OrderManagement = () => {
   const { toast } = useToast();
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [deletingOrderId, setDeletingOrderId] = useState(null);
 
-  const fetchOrders = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    const ordersCollection = collection(db, 'orders');
-
-    const unsubscribe = onSnapshot(
-      ordersCollection,
-      (snapshot) => {
-        const orderList = snapshot.docs.map(doc => {
+  useEffect(() => {
+    const fetchOrders = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const ordersCollection = collection(db, 'orders');
+        const orderSnapshot = await getDocs(ordersCollection);
+        const orderList = orderSnapshot.docs.map(doc => {
           const data = doc.data();
           const date = data.date?.seconds ? new Date(data.date.seconds * 1000) : new Date(data.date);
           return {
@@ -125,27 +63,25 @@ const OrderManagement = () => {
           };
         });
         setOrders(orderList);
-        setLoading(false);
-      },
-      (err) => {
+      } catch (err) {
         console.error("Error fetching orders: ", err);
         setError("حدث خطأ أثناء تحميل الطلبات.");
+      } finally {
         setLoading(false);
       }
-    );
-
-    return unsubscribe;
+    };
+    fetchOrders();
   }, []);
-
-  useEffect(() => {
-    const unsubscribe = fetchOrders();
-    return () => unsubscribe();
-  }, [fetchOrders]);
 
   const handleStatusChange = async (orderId, newStatus) => {
     try {
       const orderRef = doc(db, 'orders', orderId);
       await updateDoc(orderRef, { status: newStatus });
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId ? { ...order, status: newStatus } : order
+        )
+      );
       toast({
         title: "✅ تم تحديث حالة الطلب",
         description: `تم تغيير حالة الطلب إلى ${statusOptions.find(s => s.value === newStatus)?.label || newStatus}.`,
@@ -161,9 +97,9 @@ const OrderManagement = () => {
   };
 
   const handleDeleteOrder = async (orderId) => {
-    setDeletingOrderId(orderId);
     try {
       await deleteDoc(doc(db, 'orders', orderId));
+      setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
       toast({
         title: "🗑️ تم حذف الطلب",
         description: `تم حذف الطلب ${orderId} بنجاح.`,
@@ -175,8 +111,6 @@ const OrderManagement = () => {
         description: "حصل خطأ أثناء حذف الطلب. حاول مرة أخرى.",
         className: "bg-red-500 text-white"
       });
-    } finally {
-      setDeletingOrderId(null);
     }
   };
 
@@ -199,10 +133,7 @@ const OrderManagement = () => {
       <div className="p-10 text-center">
         <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
         <p className="text-lg text-destructive">{error}</p>
-        <Button onClick={fetchOrders} className="mt-4 flex items-center justify-center space-x-1 space-x-reverse">
-          <RefreshCw className="h-5 w-5" />
-          <span>حاول مرة أخرى</span>
-        </Button>
+        <Button onClick={() => window.location.reload()} className="mt-4">حاول مرة أخرى</Button>
       </div>
     );
   }
@@ -214,14 +145,7 @@ const OrderManagement = () => {
       transition={{ duration: 0.5 }}
       className="space-y-6"
     >
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold text-primary">إدارة الطلبات</h2>
-        <Button onClick={fetchOrders} variant="outline" size="sm" className="flex items-center space-x-1 space-x-reverse">
-          <RefreshCw className="h-5 w-5" />
-          <span>تحديث</span>
-        </Button>
-      </div>
-
+      <h2 className="text-2xl font-semibold text-primary">إدارة الطلبات</h2>
       {orders.length === 0 ? (
         <p className="text-muted-foreground text-center py-8">لا توجد طلبات لعرضها حالياً.</p>
       ) : (
@@ -249,9 +173,9 @@ const OrderManagement = () => {
                     className="hover:bg-muted/30 transition-colors"
                   >
                     <TableCell className="font-medium text-primary">{order.id}</TableCell>
-                    <TableCell>{order.customerName || 'غير متوفر'}</TableCell>
-                    <TableCell>{order.date?.toLocaleDateString('ar-EG') || 'غير متوفر'}</TableCell>
-                    <TableCell>{order.total?.toLocaleString('ar-EG') || 0}</TableCell>
+                    <TableCell>{order.customerName}</TableCell>
+                    <TableCell>{order.date.toLocaleDateString('ar-EG')}</TableCell>
+                    <TableCell>{order.total.toLocaleString('ar-EG')}</TableCell>
                     <TableCell>
                       <Select
                         value={order.status}
@@ -265,8 +189,10 @@ const OrderManagement = () => {
                         </SelectTrigger>
                         <SelectContent>
                           {statusOptions.map(option => (
-                            <SelectItem key={option.value} value={option.value} className="text-xs flex items-center">
-                              <span className="ml-2">{option.icon}</span> {option.label}
+                            <SelectItem key={option.value} value={option.value} className="text-xs">
+                              <div className="flex items-center">
+                                {option.icon} <span className="mr-2">{option.label}</span>
+                              </div>
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -279,39 +205,27 @@ const OrderManagement = () => {
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-red-500 hover:text-red-700"
-                              disabled={deletingOrderId === order.id}
-                            >
+                            <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-700">
                               <Trash2 className="h-5 w-5" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent className="text-right">
                             <AlertDialogHeader>
-                            <AlertDialogTitle>هل أنت متأكد من حذف الطلب؟</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              حذف الطلب نهائي ولا يمكن التراجع عنه.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteOrder(order.id)}
-                              className="bg-red-600 hover:bg-red-700 text-white"
-                            >
-                              {deletingOrderId === order.id ? (
-                                <Loader2 className="h-5 w-5 animate-spin mx-auto" />
-                              ) : (
-                                'حذف'
-                              )}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                    </TableCell>
+                              <AlertDialogTitle>هل أنت متأكد من حذف هذا الطلب؟</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                هذا الإجراء لا يمكن التراجع عنه. سيتم حذف الطلب ({order.id}) بشكل دائم.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="flex-row-reverse">
+                              <AlertDialogAction onClick={() => handleDeleteOrder(order.id)} className="bg-destructive hover:bg-destructive/90">
+                                نعم، حذف الطلب
+                              </AlertDialogAction>
+                              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                      </TableCell>
                   </motion.tr>
                 ))}
               </AnimatePresence>
@@ -321,11 +235,44 @@ const OrderManagement = () => {
       )}
 
       {/* مودال عرض تفاصيل الطلب */}
-      <OrderDetailsModal
-        order={selectedOrder}
-        isOpen={isViewModalOpen}
-        onClose={() => setIsViewModalOpen(false)}
-      />
+      <AnimatePresence>
+        {isViewModalOpen && selectedOrder && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={() => setIsViewModalOpen(false)}
+          >
+            <motion.div
+              className="bg-white rounded-lg max-w-lg w-full p-6 shadow-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-xl font-semibold mb-4 text-right">تفاصيل الطلب: {selectedOrder.id}</h3>
+              <div className="space-y-2 text-right">
+                <p><strong>اسم العميل:</strong> {selectedOrder.customerName}</p>
+                <p><strong>البريد الإلكتروني:</strong> {selectedOrder.email}</p>
+                <p><strong>رقم الهاتف:</strong> {selectedOrder.phone}</p>
+                <p><strong>العنوان:</strong> {selectedOrder.address}</p>
+                <p><strong>تاريخ الطلب:</strong> {selectedOrder.date.toLocaleString('ar-EG')}</p>
+                <p><strong>الحالة:</strong> {statusOptions.find(s => s.value === selectedOrder.status)?.label || selectedOrder.status}</p>
+                <p><strong>الإجمالي:</strong> {selectedOrder.total.toLocaleString('ar-EG')} ج.م</p>
+                <div>
+                  <strong>المنتجات:</strong>
+                  <ul className="list-disc list-inside max-h-40 overflow-y-auto mt-1">
+                    {selectedOrder.items?.map((item, idx) => (
+                      <li key={idx}>{item.name} - الكمية: {item.quantity} - السعر: {item.price.toLocaleString('ar-EG')} ج.م</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <div className="mt-6 text-center">
+                <Button onClick={() => setIsViewModalOpen(false)}>إغلاق</Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
