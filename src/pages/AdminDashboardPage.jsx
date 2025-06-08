@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import OrderManagement from '@/components/OrderManagement';
-import ProductManagement from '@/components/ProductManagement';
-import OrderDetailsView from '@/components/OrderDetailsView';
+import OrderManagement from '../components/admin/OrderManagement';
+import ProductManagement from '@/components/admin/ProductManagement';
+import OrderDetailsView from '@/components/admin/OrderDetailsView';
 import { 
   BarChart3, 
   TrendingUp, 
