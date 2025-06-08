@@ -165,5 +165,6 @@ return (
     {/* يمكنك استدعاء المكونات أو JSX الخاص بعرض الطلبات هنا */}
   </div>
 );
+}; // ← هذا القوس هو المهم
 
 export default OrderDetailsView;
