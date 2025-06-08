@@ -6,12 +6,9 @@ import {
   updatePassword as firebaseUpdatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
-  updateProfile,
-  updateEmail,
-  GoogleAuthProvider,
-  signInWithPopup,
+  updateProfile
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/firebase';
 import { Loader2 } from 'lucide-react';
 
@@ -23,8 +20,7 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentUserData, setCurrentUserData] = useState(null); // بيانات إضافية من Firestore
-  const [isAdmin, setIsAdmin] = useState(false); // حالة تحقق الادمن
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,17 +29,13 @@ export function AuthProvider({ children }) {
 
       if (user) {
         try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          const userData = userDoc.exists() ? userDoc.data() : null;
-          setCurrentUserData(userData);
-          setIsAdmin(userData?.role === "admin");  // تحقق من الادمن
+          const adminDoc = await getDoc(doc(db, "admins", user.uid));
+          setIsAdmin(adminDoc.exists());
         } catch (error) {
-          console.error("خطأ في جلب بيانات المستخدم:", error);
-          setCurrentUserData(null);
+          console.error("خطأ في التحقق من الصلاحيات:", error);
           setIsAdmin(false);
         }
       } else {
-        setCurrentUserData(null);
         setIsAdmin(false);
       }
 
@@ -76,54 +68,29 @@ export function AuthProvider({ children }) {
     return reauthenticateWithCredential(currentUser, credential);
   };
 
+  // دالة تحديث بيانات الملف الشخصي (مثل displayName)
   const updateUserProfile = async (updates) => {
     if (!currentUser) {
       return Promise.reject(new Error("لا يوجد مستخدم حالياً."));
     }
     try {
-      if (updates.displayName) {
-        await updateProfile(currentUser, { displayName: updates.displayName });
-      }
-      if (updates.phone) {
-        await setDoc(doc(db, "users", currentUser.uid), { phone: updates.phone }, { merge: true });
-        setCurrentUserData(prev => ({ ...prev, phone: updates.phone }));
-      }
+      await updateProfile(currentUser, updates);
+      // تحديث حالة المستخدم الحالية بعد التعديل
       setCurrentUser({ ...auth.currentUser });
     } catch (error) {
       return Promise.reject(error);
     }
-  };
-
-  const updateUserEmail = async (newEmail, currentPassword) => {
-    if (!currentUser) {
-      return Promise.reject(new Error("لا يوجد مستخدم حالياً."));
-    }
-    try {
-      await reauthenticateUser(currentPassword);
-      await updateEmail(currentUser, newEmail);
-      setCurrentUser({ ...auth.currentUser });
-    } catch (error) {
-      return Promise.reject(error);
-    }
-  };
-
-  const signInWithGoogle = () => {
-    const provider = new GoogleAuthProvider();
-    return signInWithPopup(auth, provider);
   };
 
   const value = {
     currentUser,
-    currentUserData,
     isAdmin,
     loading,
     signOut,
     sendPasswordReset,
     updateUserPassword,
     reauthenticateUser,
-    updateUserProfile,
-    updateUserEmail,
-    signInWithGoogle,
+    updateUserProfile,  // أضفنا الدالة هنا
   };
 
   if (loading) {
