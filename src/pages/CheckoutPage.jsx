@@ -287,38 +287,24 @@ const CheckoutPage = () => {
             </CardHeader>
 
             <CardContent className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-              {cartItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex justify-between items-center border-b pb-2"
-                >
-                  <div className="text-sm">
-                    <p class{cartItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex justify-between items-center border-b pb-2"
-                >
-                  <div className="text-sm">
-                    <p className="font-semibold">{item.name}</p>
-                    <p className="text-muted-foreground">
-                      {item.quantity} × {item.price.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}
-                    </p>
-                  </div>
-                  <div className="text-sm font-semibold">
-                    {(item.quantity * item.price).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}
-                  </div>
-                </div>
-              ))}
-              <div className="flex justify-between items-center mt-4 pt-4 border-t font-bold text-lg">
-                <span>الإجمالي:</span>
-                <span>{total.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+  {cartItems.map((item) => (
+    <div
+      key={item.id}
+      className="flex justify-between items-center border-b pb-2"
+    >
+      <div className="text-sm">
+        <p className="font-semibold">{item.name}</p>
+        <p className="text-muted-foreground">
+          {item.quantity} × {item.price.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}
+        </p>
+      </div>
+      <div className="text-sm font-semibold">
+        {(item.quantity * item.price).toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}
       </div>
     </div>
-  );
-};
-
-export default CheckoutPage;
+  ))}
+  <div className="flex justify-between items-center mt-4 pt-4 border-t font-bold text-lg">
+    <span>الإجمالي:</span>
+    <span>{total.toLocaleString('ar-EG', { style: 'currency', currency: 'EGP' })}</span>
+  </div>
+</CardContent>
