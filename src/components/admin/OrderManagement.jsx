@@ -1,4 +1,4 @@
-   "use client";
+"use client";
 
 import React, { useState, useEffect, useMemo } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  writeBatch,
 } from "@/firebase";
 
 import {
@@ -54,8 +55,13 @@ import {
   AlertTriangle,
   ListOrdered as ListOrderedIcon,
   Trash2,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  Upload,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { Input } from "@/components/ui/input";
 
 const statusOptions = [
   {
@@ -85,6 +91,8 @@ const statusOptions = [
   },
 ];
 
+const ITEMS_PER_PAGE = 10;
+
 const getStatusStyles = (status) => {
   switch (status) {
     case "pending":
@@ -113,6 +121,11 @@ const OrderDetailsView = () => {
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [selectedOrders, setSelectedOrders] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [printLogo, setPrintLogo] = useState("");
+  const [isBulkUpdateLoading, setIsBulkUpdateLoading] = useState(false);
 
   useEffect(() => {
     const ordersQuery = query(
@@ -162,6 +175,43 @@ const OrderDetailsView = () => {
     }
   };
 
+  const handleBulkStatusUpdate = async () => {
+    if (!bulkStatus || selectedOrders.length === 0) {
+      toast({
+        title: "⚠️ تحذير",
+        description: "الرجاء تحديد حالة وطلبات للتحديث",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsBulkUpdateLoading(true);
+    try {
+      const batch = writeBatch(db);
+      selectedOrders.forEach((orderId) => {
+        const orderRef = doc(db, "orders", orderId);
+        batch.update(orderRef, { status: bulkStatus });
+      });
+
+      await batch.commit();
+      toast({
+        title: "✅ تم التحديث الجماعي",
+        description: `تم تحديث ${selectedOrders.length} طلب/طلبات إلى الحالة المحددة`,
+        className: "bg-green-500 text-white",
+      });
+      setSelectedOrders([]);
+      setBulkStatus("");
+    } catch (err) {
+      toast({
+        title: "❌ خطأ في التحديث الجماعي",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkUpdateLoading(false);
+    }
+  };
+
   const handleViewOrder = (order) => {
     setSelectedOrder(order);
     setIsViewModalOpen(true);
@@ -194,6 +244,14 @@ const OrderDetailsView = () => {
     }
   };
 
+  const toggleOrderSelection = (orderId) => {
+    setSelectedOrders((prev) =>
+      prev.includes(orderId)
+        ? prev.filter((id) => id !== orderId)
+        : [...prev, orderId]
+    );
+  };
+
   const filteredOrders = useMemo(() => {
     let results = [...orders];
     if (searchTerm.trim()) {
@@ -211,6 +269,24 @@ const OrderDetailsView = () => {
     }
     return results;
   }, [searchTerm, statusFilter, orders]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPrintLogo(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <motion.div
@@ -248,6 +324,46 @@ const OrderDetailsView = () => {
         </Select>
       </div>
 
+      {/* Bulk Update Section */}
+      <div className="flex flex-wrap items-center gap-4 p-4 bg-gray-50 rounded-lg">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">
+            {selectedOrders.length} طلب/طلبات محددة
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSelectedOrders([])}
+            disabled={selectedOrders.length === 0}
+          >
+            إلغاء التحديد
+          </Button>
+        </div>
+        <Select value={bulkStatus} onValueChange={setBulkStatus}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="تحديث الحالة المحددة إلى" />
+          </SelectTrigger>
+          <SelectContent>
+            {statusOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.icon} {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          onClick={handleBulkStatusUpdate}
+          disabled={!bulkStatus || selectedOrders.length === 0}
+        >
+          {isBulkUpdateLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-2" />
+          )}
+          تحديث المحدد
+        </Button>
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center p-10">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -265,86 +381,156 @@ const OrderDetailsView = () => {
           لا توجد طلبات تطابق البحث أو الفلتر.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border shadow-sm bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/50">
-                <TableHead className="text-right">رقم الطلب</TableHead>
-                <TableHead className="text-right">اسم العميل</TableHead>
-                <TableHead className="text-right">التاريخ</TableHead>
-                <TableHead className="text-right">الإجمالي (ج.م)</TableHead>
-                <TableHead className="text-right">الحالة</TableHead>
-                <TableHead className="text-center">الإجراءات</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredOrders.map((order) => (
-                <motion.tr
-                  key={order.id}
-                  layout
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="hover:bg-muted/30 transition-colors"
-                >
-                  <TableCell className="font-medium text-primary truncate max-w-[100px]">
-                    {order.id}
-                  </TableCell>
-                  <TableCell>{order.customerInfo?.name || "غير متوفر"}</TableCell>
-                  <TableCell>
-                    {order.createdAt
-                      ? new Date(order.createdAt).toLocaleDateString("ar-EG")
-                      : "غير متوفر"}
-                  </TableCell>
-                  <TableCell>
-                    {(order.totalAmount || 0).toLocaleString("ar-EG")}
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={order.status}
-                      onValueChange={(newStatus) =>
-                        handleStatusChange(order.id, newStatus)
+        <>
+          <div className="overflow-x-auto rounded-lg border border-border shadow-sm bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="w-[50px] text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        selectedOrders.length > 0 &&
+                        selectedOrders.length === paginatedOrders.length
                       }
-                    >
-                      <SelectTrigger
-                        className={`w-[150px] text-xs h-9 ${getStatusStyles(
-                          order.status
-                        )}`}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedOrders(paginatedOrders.map((o) => o.id));
+                        } else {
+                          setSelectedOrders([]);
+                        }
+                      }}
+                    />
+                  </TableHead>
+                  <TableHead className="text-right">رقم الطلب</TableHead>
+                  <TableHead className="text-right">اسم العميل</TableHead>
+                  <TableHead className="text-right">التاريخ</TableHead>
+                  <TableHead className="text-right">الإجمالي (ج.م)</TableHead>
+                  <TableHead className="text-right">الحالة</TableHead>
+                  <TableHead className="text-center">الإجراءات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedOrders.map((order) => (
+                  <motion.tr
+                    key={order.id}
+                    layout
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="hover:bg-muted/30 transition-colors"
+                  >
+                    <TableCell className="text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedOrders.includes(order.id)}
+                        onChange={() => toggleOrderSelection(order.id)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium text-primary truncate max-w-[100px]">
+                      {order.id}
+                    </TableCell>
+                    <TableCell>{order.customerInfo?.name || "غير متوفر"}</TableCell>
+                    <TableCell>
+                      {order.createdAt
+                        ? new Date(order.createdAt).toLocaleDateString("ar-EG")
+                        : "غير متوفر"}
+                    </TableCell>
+                    <TableCell>
+                      {(order.totalAmount || 0).toLocaleString("ar-EG")}
+                    </TableCell>
+                    <TableCell>
+                      <Select
+                        value={order.status}
+                        onValueChange={(newStatus) =>
+                          handleStatusChange(order.id, newStatus)
+                        }
                       >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {statusOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.icon} {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="text-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleViewOrder(order)}
-                      title="عرض الطلب"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => confirmDeleteOrder(order)}
-                      title="حذف الطلب"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </motion.tr>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                        <SelectTrigger
+                          className={`w-[150px] text-xs h-9 ${getStatusStyles(
+                            order.status
+                          )}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statusOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.icon} {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="text-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewOrder(order)}
+                        title="عرض الطلب"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => confirmDeleteOrder(order)}
+                        title="حذف الطلب"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </motion.tr>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">
+                عرض {paginatedOrders.length} من {filteredOrders.length} طلب
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  السابق
+                </Button>
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                    (page) => (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                      >
+                        {page}
+                      </Button>
+                    )
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                  }
+                  disabled={currentPage === totalPages}
+                >
+                  التالي
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Order Details Dialog */}
@@ -360,11 +546,12 @@ const OrderDetailsView = () => {
                 {/* Customer Info */}
                 <div className="bg-gray-100 p-4 rounded-lg shadow">
                   <h2 className="text-lg font-semibold mb-2">📋 معلومات العميل</h2>
-                  <p>🧍‍♂️ <strong>الاسم:</strong> {selectedOrder.name}</p>
-                  <p>📍 <strong>العنوان:</strong> {selectedOrder.address}</p>
+                  <p>🧍‍♂️ <strong>الاسم:</strong> {selectedOrder.customerInfo?.name}</p>
+                  <p>📱 <strong>الهاتف:</strong> {selectedOrder.customerInfo?.phone}</p>
+                  <p>📍 <strong>العنوان:</strong> {selectedOrder.customerInfo?.address}</p>
                   <p>💳 <strong>طريقة الدفع:</strong> {selectedOrder.paymentMethod}</p>
                   <p>📅 <strong>تاريخ الطلب:</strong>{" "}
-                    {new Date(selectedOrder.timestamp?.seconds * 1000).toLocaleDateString("ar-EG")}
+                    {new Date(selectedOrder.createdAt).toLocaleDateString("ar-EG")}
                   </p>
                   <p>💰 <strong>المجموع:</strong>{" "}
                     {selectedOrder.totalAmount?.toLocaleString("ar-EG")} ج.م
@@ -409,8 +596,27 @@ const OrderDetailsView = () => {
             </div>
           )}
 
-          {/* Print Button */}
-          <div className="flex justify-end mt-6">
+          {/* Print Button and Logo Upload */}
+          <div className="flex justify-between items-center mt-6">
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <Upload className="h-4 w-4" />
+                تحميل شعار للطباعة
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+              </label>
+              {printLogo && (
+                <img
+                  src={printLogo}
+                  alt="شعار الطباعة"
+                  className="h-8 w-8 object-contain rounded"
+                />
+              )}
+            </div>
             <Button
               variant="secondary"
               onClick={() => {
@@ -429,12 +635,23 @@ const OrderDetailsView = () => {
                         li { border: 1px solid #ddd; margin-bottom: 10px; padding: 8px; border-radius: 5px; }
                         .header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
                         .logo { max-height: 60px; margin-bottom: 10px; }
+                        .grid { display: grid; gap: 1.5rem; }
+                        .md\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                        .bg-gray-100 { background-color: #f3f4f6; }
+                        .rounded-lg { border-radius: 0.5rem; }
+                        .shadow { box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); }
+                        .p-4 { padding: 1rem; }
+                        .font-semibold { font-weight: 600; }
+                        .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+                        .mb-2 { margin-bottom: 0.5rem; }
+                        .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.5rem; }
                       </style>
                     </head>
                     <body>
                       <div class="header">
-                        <img src="https://envs.sh/XgU.jpg" alt="شعار المتجر" class="logo" onerror="this.style.display='none'" />
-                        <h1>Right Water Store </h1>
+                        ${printLogo ? `<img src="${printLogo}" alt="شعار المتجر" class="logo" />` : ''}
+                        <h1>تفاصيل الطلب</h1>
+                        <p>رقم الطلب: ${selectedOrder?.id || ''}</p>
                       </div>
                       ${printContents}
                     </body>
