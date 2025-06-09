@@ -347,71 +347,105 @@ const OrderDetailsView = () => {
         </div>
       )}
 
-      {/* Dialog عرض الطلب */}
-      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="max-w-3xl overflow-y-auto max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle>تفاصيل الطلب رقم {selectedOrder?.id}</DialogTitle>
-          </DialogHeader>
+      <DialogContent className="max-w-4xl rounded-xl">
+  <DialogHeader>
+    <DialogTitle className="text-2xl">👁️ عرض تفاصيل الطلب</DialogTitle>
+  </DialogHeader>
 
-          {selectedOrder && (
-            <div id="printable-order" className="space-y-4" dir="rtl">
-              <h4>🧍‍♂️ اسم العميل: {selectedOrder.customerInfo?.name}</h4>
-              <h4>📦 المنتجات:</h4>
-              <ul className="grid gap-2">
-                {selectedOrder.cart?.map((item, i) => (
-                  <li key={i}>
-                    <strong>{item.title}</strong> - الكمية: {item.quantity} - السعر:{" "}
-                    {item.price?.toLocaleString("ar-EG")} ج.م
-                  </li>
-                ))}
-              </ul>
-              <h4>💳 وسيلة الدفع: {selectedOrder.paymentMethod}</h4>
-              <h4>📍 عنوان الشحن: {selectedOrder.customerInfo?.address}</h4>
-              <h4>📅 تاريخ الطلب: {selectedOrder.createdAt.toLocaleDateString("ar-EG")}</h4>
-              <h4>💰 المجموع: {selectedOrder.totalAmount?.toLocaleString("ar-EG")} ج.م</h4>
-            </div>
-          )}
+  {selectedOrder && (
+    <div id="printable-order" className="space-y-6">
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* بيانات العميل */}
+        <div className="bg-gray-100 p-4 rounded-lg shadow">
+          <h2 className="text-lg font-semibold mb-2">📋 معلومات العميل</h2>
+          <p>🧍‍♂️ <strong>الاسم:</strong> {selectedOrder.name}</p>
+          <p>📍 <strong>العنوان:</strong> {selectedOrder.address}</p>
+          <p>💳 <strong>طريقة الدفع:</strong> {selectedOrder.paymentMethod}</p>
+          <p>📅 <strong>تاريخ الطلب:</strong>{" "}
+            {new Date(selectedOrder.timestamp?.seconds * 1000).toLocaleDateString("ar-EG")}
+          </p>
+          <p>💰 <strong>المجموع:</strong>{" "}
+            {selectedOrder.totalAmount?.toLocaleString("ar-EG")} ج.م
+          </p>
+        </div>
 
-          <div className="text-left mt-4">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const printContents =
-                  document.getElementById("printable-order")?.innerHTML;
-                if (!printContents) return;
-                const printWindow = window.open("", "_blank");
-                printWindow.document.write(`
-                  <html dir="rtl" lang="ar">
-                    <head>
-                      <title>طباعة تفاصيل الطلب</title>
-                      <style>
-                        body { font-family: sans-serif; padding: 20px; direction: rtl; }
-                        h1 { font-size: 24px; margin-bottom: 10px; color: #1f2937; }
-                        h4 { margin: 8px 0; color: #333; }
-                        ul { list-style: none; padding: 0; }
-                        li { border: 1px solid #ddd; margin-bottom: 10px; padding: 8px; border-radius: 5px; }
-                        .header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
-                        .logo { max-height: 60px; margin-bottom: 10px; }
-                      </style>
-                    </head>
-                    <body>
-                      <div class="header">
-                        <img src="https://fox256.vercel.app/logo.png" alt="شعار المتجر" class="logo" onerror="this.style.display='none'" />
-                        <h1>متجر فوكس</h1>
-                      </div>
-                      ${printContents}
-                    </body>
-                  </html>
-                `);
-                printWindow.document.close();
-                printWindow.print();
-              }}
-            >
-              🖨️ طباعة
-            </Button>
+        {/* تفاصيل المنتجات */}
+        <div className="bg-white p-4 rounded-lg shadow">
+          <h2 className="text-lg font-semibold mb-4">📦 المنتجات</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {selectedOrder.cart?.map((item, index) => (
+              <div
+                key={index}
+                className="border p-3 rounded-md bg-gray-50 hover:bg-gray-100 transition flex flex-col items-center text-center"
+              >
+                {item.image && (
+                  <img
+                    src={item.image}
+                    alt={item.title}
+                    className="h-24 w-24 object-contain mb-2 rounded"
+                    onError={(e) => (e.currentTarget.style.display = "none")}
+                  />
+                )}
+                <p className="font-medium">{item.title}</p>
+                <p><strong>الكمية:</strong> {item.quantity}</p>
+                <p><strong>السعر:</strong> {(item.price || 0).toLocaleString("ar-EG")} ج.م</p>
+                <p><strong>الإجمالي:</strong> {(item.quantity * item.price || 0).toLocaleString("ar-EG")} ج.م</p>
+              </div>
+            ))}
           </div>
-        </DialogContent>
+
+          {/* مجموع الطلب الكلي */}
+          <div className="mt-4 text-lg font-semibold text-right border-t pt-3">
+            المجموع الكلي للطلب:{" "}
+            {(selectedOrder.cart?.reduce(
+              (sum, item) => sum + (item.quantity * item.price || 0),
+              0
+            )).toLocaleString("ar-EG")} ج.م
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* زر الطباعة */}
+  <div className="flex justify-end mt-6">
+    <Button
+      variant="secondary"
+      onClick={() => {
+        const printContents = document.getElementById('printable-order')?.innerHTML;
+        if (!printContents) return;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+          <html dir="rtl" lang="ar">
+            <head>
+              <title>طباعة تفاصيل الطلب</title>
+              <style>
+                body { font-family: sans-serif; padding: 20px; direction: rtl; }
+                h1 { font-size: 24px; margin-bottom: 10px; color: #1f2937; }
+                h4 { margin: 8px 0; color: #333; }
+                ul { list-style: none; padding: 0; }
+                li { border: 1px solid #ddd; margin-bottom: 10px; padding: 8px; border-radius: 5px; }
+                .header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #ccc; padding-bottom: 10px; }
+                .logo { max-height: 60px; margin-bottom: 10px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <img src="https://fox256.vercel.app/logo.png" alt="شعار المتجر" class="logo" onerror="this.style.display='none'" />
+                <h1>متجر فوكس</h1>
+              </div>
+              ${printContents}
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }}
+    >
+      🖨️ طباعة
+    </Button>
+  </div>
+</DialogContent>
       </Dialog>
 
       {/* تنبيه تأكيد الحذف */}
