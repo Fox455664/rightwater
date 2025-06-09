@@ -431,8 +431,8 @@ const OrderDetailsView = () => {
             </head>
             <body>
               <div class="header">
-                <img src="https://fox256.vercel.app/logo.png" alt="شعار المتجر" class="logo" onerror="this.style.display='none'" />
-                <h1>متجر فوكس</h1>
+                <img src="https://envs.sh/XgU.jpg" alt="شعار المتجر" class="logo" onerror="this.style.display='none'" />
+                <h1>Right Water Store </h1>
               </div>
               ${printContents}
             </body>
