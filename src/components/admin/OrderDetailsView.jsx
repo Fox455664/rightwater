@@ -442,7 +442,15 @@ const OrderDetailsView = () => {
         printWindow.print();
       }}
     >
-      {/*const OrderDetailsView = () =>*/}
+      const OrderDetailsView = () => {
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
+
+  const executeDeleteOrder = () => {
+    // هنا كود حذف الطلب
+    setIsDeleteAlertOpen(false);
+  };
+
   return (
     <motion.div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
