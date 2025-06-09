@@ -671,6 +671,5 @@ const getStatusStyles = (status) => {
       </AlertDialog>
     </motion.div>
   );
-
 }
 export default OrderDetailsView;
