@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, Timestamp, doc, updateDoc, getDoc, onSnapshot, query, where, orderBy, deleteDoc, setDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, Timestamp, doc, updateDoc, getDoc, onSnapshot, query, where, orderBy, deleteDoc, setDoc, getDocs, limit, writeBatch } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider, FacebookAuthProvider, TwitterAuthProvider, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail, updateProfile, signInWithPopup } from "firebase/auth";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
@@ -38,12 +38,15 @@ export {
   doc,
   updateDoc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   where,
   orderBy,
+  limit,
   deleteDoc,
   setDoc,
+  writeBatch,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
