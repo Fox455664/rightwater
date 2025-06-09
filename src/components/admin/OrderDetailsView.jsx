@@ -442,7 +442,7 @@ const OrderDetailsView = () => {
         printWindow.print();
       }}
     >
-      const OrderDetailsView = () => {
+      {/*const OrderDetailsView = () =>*/}
   return (
     <motion.div>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
