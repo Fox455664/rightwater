@@ -110,22 +110,7 @@ const getStatusStyles = (status) => {
   }
 };
 
-const OrderDetailsView = () => {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const { toast } = useToast();
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [orderToDelete, setOrderToDelete] = useState(null);
-  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [bulkStatus, setBulkStatus] = useState("");
-  const [selectedOrders, setSelectedOrders] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [printLogo, setPrintLogo] = useState("");
-  const [isBulkUpdateLoading, setIsBulkUpdateLoading] = useState(false);
+
 
   useEffect(() => {
     const ordersQuery = query(
