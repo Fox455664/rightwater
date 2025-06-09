@@ -442,10 +442,16 @@ const OrderDetailsView = () => {
         printWindow.print();
       }}
     >
-      🖨️ طباعة
-    </Button>
-  </div>
-</DialogContent>
+      const OrderDetailsView = () => {
+  return (
+    <motion.div>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <div>
+            {/* محتوى حوار الطلب */}
+            <Button>🖨️ طباعة</Button>
+          </div>
+        </DialogContent>
       </Dialog>
 
       {/* تنبيه تأكيد الحذف */}
