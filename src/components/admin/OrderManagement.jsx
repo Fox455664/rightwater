@@ -255,7 +255,7 @@ const getStatusStyles = (status) => {
     return results;
   }, [searchTerm, statusFilter, orders]);
 
-  // Pagination logic
+  // Pagination logic  vvvmjgffvbjjgffffggggffggggt
   const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
   const paginatedOrders = filteredOrders.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -651,7 +651,7 @@ const getStatusStyles = (status) => {
           </div>
         </DialogContent>
       </Dialog>
-
+      
       {/* Delete Confirmation Alert */}
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
         <AlertDialogContent>
